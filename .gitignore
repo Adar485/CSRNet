@@ -1,0 +1,23 @@
+# Model ağırlıkları (çok büyük, GitHub'a sığmaz)
+weights.pth
+
+# Yüklenen ve işlenen videolar
+static/uploads/
+static/outputs/
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+
+# Sanal ortam
+venv/
+env/
+
+# IDE dosyaları
+.vscode/
+.idea/
+
+# Windows
+Thumbs.db
+desktop.ini

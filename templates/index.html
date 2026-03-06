@@ -1,0 +1,737 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CSRNet — Kalabalık Analiz Sistemi</title>
+<link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Rajdhani:wght@300;400;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg:      #050810;
+    --panel:   #0a0f1e;
+    --border:  #1a2a4a;
+    --accent:  #00d4ff;
+    --accent2: #ff4444;
+    --accent3: #00ff88;
+    --text:    #c8d8f0;
+    --muted:   #4a6080;
+    --glow:    0 0 20px rgba(0,212,255,0.3);
+  }
+  * { margin:0; padding:0; box-sizing:border-box; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Rajdhani', sans-serif;
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+  body::before {
+    content:''; position:fixed; inset:0;
+    background-image:
+      linear-gradient(rgba(0,212,255,0.03) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(0,212,255,0.03) 1px, transparent 1px);
+    background-size:40px 40px;
+    pointer-events:none; z-index:0;
+  }
+  body::after {
+    content:''; position:fixed; top:-200px; left:0; right:0; height:200px;
+    background:linear-gradient(transparent, rgba(0,212,255,0.04), transparent);
+    animation:scan 8s linear infinite;
+    pointer-events:none; z-index:0;
+  }
+  @keyframes scan { from{top:-200px} to{top:100vh} }
+
+  .container {
+    position:relative; z-index:1;
+    max-width:1600px; margin:0 auto;
+    padding:0 24px 60px;
+  }
+
+  /* ── Header ── */
+  header {
+    display:flex; align-items:center; justify-content:space-between;
+    padding:28px 0 24px;
+    border-bottom:1px solid var(--border);
+    margin-bottom:32px;
+  }
+  .logo { display:flex; align-items:center; gap:14px; }
+  .logo-icon {
+    width:42px; height:42px;
+    border:2px solid var(--accent);
+    display:grid;
+    grid-template-columns:1fr 1fr 1fr;
+    grid-template-rows:1fr 1fr 1fr;
+    gap:3px; padding:6px;
+    box-shadow:var(--glow);
+    animation:pulse-border 3s ease-in-out infinite;
+  }
+  @keyframes pulse-border {
+    0%,100%{border-color:var(--accent);box-shadow:var(--glow)}
+    50%{border-color:rgba(0,212,255,0.3);box-shadow:none}
+  }
+  .logo-dot {
+    background:var(--accent); border-radius:50%;
+    animation:dot-pulse 2s ease-in-out infinite;
+  }
+  .logo-dot:nth-child(1){animation-delay:0.0s}
+  .logo-dot:nth-child(2){animation-delay:0.2s}
+  .logo-dot:nth-child(3){animation-delay:0.4s}
+  .logo-dot:nth-child(4){animation-delay:0.6s}
+  .logo-dot:nth-child(5){animation-delay:0.8s}
+  @keyframes dot-pulse{0%,100%{opacity:1}50%{opacity:0.2}}
+  .logo-text h1 {
+    font-family:'Share Tech Mono',monospace;
+    font-size:22px; color:var(--accent); letter-spacing:3px; line-height:1;
+  }
+  .logo-text p {
+    font-size:11px; color:var(--muted);
+    letter-spacing:2px; text-transform:uppercase; margin-top:3px;
+  }
+  .status-bar { display:flex; align-items:center; gap:24px; }
+  .status-item {
+    display:flex; align-items:center; gap:8px;
+    font-family:'Share Tech Mono',monospace; font-size:12px; color:var(--muted);
+  }
+  .status-dot {
+    width:8px; height:8px; border-radius:50%;
+    background:var(--accent3); box-shadow:0 0 8px var(--accent3);
+    animation:blink 2s ease-in-out infinite;
+  }
+  @keyframes blink{0%,100%{opacity:1}50%{opacity:0.3}}
+
+  /* ── Ana Layout: sol dar, sağ geniş ── */
+  .main-grid {
+    display:grid;
+    grid-template-columns:360px 1fr;
+    gap:20px;
+    align-items:start;
+  }
+
+  /* ── Panel ── */
+  .panel {
+    background:var(--panel); border:1px solid var(--border);
+    padding:24px; position:relative;
+  }
+  .panel::before {
+    content:''; position:absolute;
+    top:0; left:0; right:0; height:2px;
+    background:linear-gradient(90deg, transparent, var(--accent), transparent);
+  }
+  .panel-title {
+    font-family:'Share Tech Mono',monospace;
+    font-size:11px; letter-spacing:3px; color:var(--accent);
+    text-transform:uppercase; margin-bottom:20px;
+    display:flex; align-items:center; gap:10px;
+  }
+  .panel-title::after { content:''; flex:1; height:1px; background:var(--border); }
+
+  /* ── Upload ── */
+  .upload-zone {
+    border:2px dashed var(--border);
+    padding:32px 20px; text-align:center;
+    cursor:pointer; transition:all 0.3s; margin-bottom:16px;
+  }
+  .upload-zone:hover,.upload-zone.drag-over {
+    border-color:var(--accent); background:rgba(0,212,255,0.04);
+  }
+  .upload-icon { font-size:38px; margin-bottom:10px; opacity:0.5; }
+  .upload-zone h3 { font-size:14px; font-weight:600; color:var(--text); margin-bottom:5px; letter-spacing:1px; }
+  .upload-zone p  { font-size:12px; color:var(--muted); }
+  #fileInput { display:none; }
+
+  .file-preview {
+    display:none; background:rgba(0,212,255,0.05);
+    border:1px solid var(--accent); padding:10px 14px;
+    margin-bottom:14px; flex-direction:column; gap:3px;
+  }
+  .file-preview.show { display:flex; }
+  .file-name {
+    font-family:'Share Tech Mono',monospace; font-size:12px; color:var(--accent);
+    white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+  }
+  .file-size { font-size:11px; color:var(--muted); }
+
+  /* ── Butonlar ── */
+  .btn-row { display:flex; gap:10px; }
+  .btn-analyze {
+    flex:1; padding:14px;
+    background:transparent; border:2px solid var(--accent);
+    color:var(--accent);
+    font-family:'Share Tech Mono',monospace;
+    font-size:12px; letter-spacing:3px; text-transform:uppercase;
+    cursor:pointer; transition:all 0.3s; position:relative; overflow:hidden;
+  }
+  .btn-analyze::before {
+    content:''; position:absolute;
+    top:0; left:-100%; right:100%; bottom:0;
+    background:var(--accent); transition:all 0.4s; z-index:-1;
+  }
+  .btn-analyze:hover::before { left:0; right:0; }
+  .btn-analyze:hover { color:var(--bg); }
+  .btn-analyze:disabled { opacity:0.3; cursor:not-allowed; }
+
+  .btn-stop {
+    display:none; padding:14px 18px;
+    background:rgba(255,68,68,0.1); border:2px solid var(--accent2);
+    color:var(--accent2);
+    font-family:'Share Tech Mono',monospace;
+    font-size:12px; letter-spacing:2px; text-transform:uppercase;
+    cursor:pointer; transition:all 0.3s; white-space:nowrap;
+  }
+  .btn-stop:hover { background:rgba(255,68,68,0.25); }
+  .btn-stop.show  { display:block; }
+
+  .btn-download {
+    display:none; width:100%; padding:12px;
+    background:rgba(0,255,136,0.08); border:1px solid var(--accent3);
+    color:var(--accent3);
+    font-family:'Share Tech Mono',monospace;
+    font-size:11px; letter-spacing:3px; text-transform:uppercase;
+    cursor:pointer; text-align:center; text-decoration:none;
+    transition:all 0.3s; margin-top:12px;
+  }
+  .btn-download:hover { background:rgba(0,255,136,0.18); }
+  .btn-download.show  { display:block; }
+
+  /* ── Anlık Sayaç ── */
+  .live-count-wrap {
+    display:none; margin-top:14px;
+    align-items:center; gap:12px;
+  }
+  .live-count-wrap.show { display:flex; }
+  .live-dot {
+    width:10px; height:10px; border-radius:50%;
+    background:var(--accent2); box-shadow:0 0 10px var(--accent2);
+    animation:blink 0.8s ease-in-out infinite; flex-shrink:0;
+  }
+  .live-label {
+    font-family:'Share Tech Mono',monospace;
+    font-size:10px; color:var(--muted); letter-spacing:2px;
+  }
+  .live-number {
+    font-family:'Share Tech Mono',monospace;
+    font-size:32px; color:var(--accent); line-height:1;
+    text-shadow:0 0 20px rgba(0,212,255,0.5);
+    transition:all 0.2s;
+  }
+
+  /* ── Kalabalık Seviyesi ── */
+  .crowd-badge {
+    display:none; margin-top:10px;
+    padding:9px 14px;
+    border-left:4px solid var(--accent);
+    font-family:'Share Tech Mono',monospace;
+    font-size:11px; letter-spacing:2px; text-transform:uppercase;
+    transition:all 0.4s;
+  }
+  .crowd-badge.show { display:block; }
+  .crowd-badge.level-0 { border-color:#4a9eff; color:#4a9eff; background:rgba(74,158,255,0.08); }
+  .crowd-badge.level-1 { border-color:#ffcc00; color:#ffcc00; background:rgba(255,204,0,0.08); }
+  .crowd-badge.level-2 { border-color:#ff8800; color:#ff8800; background:rgba(255,136,0,0.08); }
+  .crowd-badge.level-3 { border-color:#ff4444; color:#ff4444; background:rgba(255,68,68,0.08); }
+
+  /* ── Progress ── */
+  .progress-wrap { display:none; margin-top:14px; }
+  .progress-wrap.show { display:block; }
+  .progress-label {
+    display:flex; justify-content:space-between;
+    font-family:'Share Tech Mono',monospace;
+    font-size:11px; color:var(--muted); margin-bottom:7px;
+  }
+  .progress-bar-bg { height:4px; background:var(--border); overflow:hidden; }
+  .progress-bar-fill {
+    height:100%;
+    background:linear-gradient(90deg, var(--accent), var(--accent3));
+    width:0%; transition:width 0.4s;
+    box-shadow:0 0 10px var(--accent);
+  }
+  .progress-log {
+    margin-top:8px;
+    font-family:'Share Tech Mono',monospace;
+    font-size:10px; color:var(--muted);
+    height:44px; overflow-y:auto; line-height:1.8;
+  }
+  .progress-log span { display:block; color:var(--accent3); }
+
+  /* ── Stats ── */
+  .stats-grid {
+    display:grid; grid-template-columns:1fr 1fr; gap:8px;
+    margin-top:16px;
+  }
+  .stat-card {
+    background:rgba(0,212,255,0.04);
+    border:1px solid var(--border);
+    padding:12px; text-align:center;
+  }
+  .stat-value {
+    font-family:'Share Tech Mono',monospace;
+    font-size:22px; color:var(--accent);
+    line-height:1; margin-bottom:4px;
+  }
+  .stat-label {
+    font-size:10px; letter-spacing:2px;
+    color:var(--muted); text-transform:uppercase;
+  }
+
+  /* ── Sağ Kolon ── */
+  .right-col { display:flex; flex-direction:column; gap:16px; }
+
+  /* ── İKİLİ Video Ekranı ── */
+  .dual-video {
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:12px;
+  }
+
+  .video-box {
+    background:#000; border:1px solid var(--border);
+    aspect-ratio:16/9;
+    display:flex; align-items:center; justify-content:center;
+    position:relative; overflow:hidden;
+  }
+  .video-box::before,.video-box::after {
+    content:''; position:absolute;
+    width:16px; height:16px;
+    border-color:var(--accent); border-style:solid;
+    z-index:2; opacity:0.5;
+  }
+  .video-box::before { top:6px; left:6px;    border-width:2px 0 0 2px; }
+  .video-box::after  { bottom:6px; right:6px; border-width:0 2px 2px 0; }
+
+  .video-box-label {
+    position:absolute; top:8px; left:50%; transform:translateX(-50%);
+    font-family:'Share Tech Mono',monospace;
+    font-size:10px; letter-spacing:2px; color:var(--muted);
+    background:rgba(5,8,16,0.7); padding:3px 10px;
+    z-index:3; white-space:nowrap;
+  }
+
+  .placeholder-inner { text-align:center; color:var(--muted); }
+  .placeholder-inner .ph-icon { font-size:36px; margin-bottom:8px; opacity:0.3; }
+  .placeholder-inner p { font-family:'Share Tech Mono',monospace; font-size:10px; letter-spacing:1px; }
+
+  #originalVideo {
+    display:none; width:100%; height:100%; object-fit:contain;
+  }
+  #liveCanvas {
+    display:none; width:100%; height:100%; object-fit:contain;
+  }
+
+  /* ── Grafik ── */
+  .chart-wrap { position:relative; height:120px; }
+  #countChart { width:100%; height:100%; }
+
+  @media(max-width:1100px){
+    .main-grid{ grid-template-columns:1fr; }
+    .dual-video{ grid-template-columns:1fr; }
+    .status-bar{ display:none; }
+  }
+</style>
+</head>
+<body>
+<div class="container">
+
+  <header>
+    <div class="logo">
+      <div class="logo-icon">
+        <div class="logo-dot"></div><div class="logo-dot"></div><div class="logo-dot"></div>
+        <div class="logo-dot"></div><div class="logo-dot"></div><div class="logo-dot"></div>
+        <div class="logo-dot"></div><div class="logo-dot"></div><div class="logo-dot"></div>
+      </div>
+      <div class="logo-text">
+        <h1>CSRNET</h1>
+        <p>Kalabalık Analiz Sistemi</p>
+      </div>
+    </div>
+    <div class="status-bar">
+      <div class="status-item"><div class="status-dot"></div><span>CUDA AKTİF</span></div>
+      <div class="status-item"><span style="color:var(--text)">RTX 3050</span></div>
+      <div class="status-item"><span>ShanghaiTech</span></div>
+    </div>
+  </header>
+
+  <div class="main-grid">
+
+    <!-- Sol Panel -->
+    <div style="display:flex; flex-direction:column; gap:16px;">
+
+      <div class="panel">
+        <div class="panel-title">Video Yükle</div>
+
+        <div class="upload-zone" id="uploadZone">
+          <div class="upload-icon">📹</div>
+          <h3>Video Sürükle & Bırak</h3>
+          <p>veya tıkla &nbsp;•&nbsp; MP4, AVI, MOV</p>
+        </div>
+        <input type="file" id="fileInput" accept="video/*">
+
+        <div class="file-preview" id="filePreview">
+          <div class="file-name" id="fileName">—</div>
+          <div class="file-size" id="fileSize">—</div>
+        </div>
+
+        <div class="btn-row">
+          <button class="btn-analyze" id="analyzeBtn" disabled>▶ ANALİZ</button>
+          <button class="btn-stop"    id="stopBtn">⏹ DURDUR</button>
+        </div>
+
+        <!-- Anlık sayaç -->
+        <div class="live-count-wrap" id="liveCountWrap">
+          <div class="live-dot"></div>
+          <div>
+            <div class="live-label">ANLİK KİŞİ SAYISI</div>
+            <div class="live-number" id="liveNumber">0</div>
+          </div>
+        </div>
+
+        <!-- Kalabalık seviyesi -->
+        <div class="crowd-badge" id="crowdBadge"></div>
+
+        <!-- Progress -->
+        <div class="progress-wrap" id="progressWrap">
+          <div class="progress-label">
+            <span id="progressStatus">HAZIR</span>
+            <span id="progressPct">0%</span>
+          </div>
+          <div class="progress-bar-bg">
+            <div class="progress-bar-fill" id="progressFill"></div>
+          </div>
+          <div class="progress-log" id="progressLog"></div>
+        </div>
+      </div>
+
+      <!-- Sonuçlar -->
+      <div class="panel">
+        <div class="panel-title">Analiz Sonuçları</div>
+        <div class="stats-grid">
+          <div class="stat-card">
+            <div class="stat-value" id="statAvg">—</div>
+            <div class="stat-label">Ort. Kişi</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-value" id="statMax">—</div>
+            <div class="stat-label">Maks. Kişi</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-value" id="statMin">—</div>
+            <div class="stat-label">Min. Kişi</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-value" id="statFrames">—</div>
+            <div class="stat-label">Toplam Kare</div>
+          </div>
+        </div>
+        <a class="btn-download" id="downloadBtn" download>⬇ İŞLENMİŞ VİDEOYU İNDİR</a>
+      </div>
+
+    </div>
+
+    <!-- Sağ Kolon -->
+    <div class="right-col">
+
+      <!-- İkili Video -->
+      <div class="panel">
+        <div class="panel-title">Görüntü</div>
+        <div class="dual-video">
+
+          <!-- Sol: Orijinal -->
+          <div>
+            <div class="video-box" id="boxOriginal">
+              <div class="video-box-label">ORİJİNAL</div>
+              <div class="placeholder-inner" id="phOriginal">
+                <div class="ph-icon">📹</div>
+                <p>Video bekleniyor</p>
+              </div>
+              <video id="originalVideo" controls loop></video>
+            </div>
+          </div>
+
+          <!-- Sağ: Isı Haritası -->
+          <div>
+            <div class="video-box" id="boxHeat">
+              <div class="video-box-label">ISI HARİTASI</div>
+              <div class="placeholder-inner" id="phHeat">
+                <div class="ph-icon">🌡</div>
+                <p>Analiz bekleniyor</p>
+              </div>
+              <img id="liveCanvas" alt="heatmap">
+            </div>
+          </div>
+
+        </div>
+      </div>
+
+      <!-- Grafik -->
+      <div class="panel">
+        <div class="panel-title">Kare Başına Kişi Sayısı</div>
+        <div class="chart-wrap">
+          <canvas id="countChart"></canvas>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<script>
+const uploadZone    = document.getElementById('uploadZone');
+const fileInput     = document.getElementById('fileInput');
+const filePreview   = document.getElementById('filePreview');
+const fileName      = document.getElementById('fileName');
+const fileSize      = document.getElementById('fileSize');
+const analyzeBtn    = document.getElementById('analyzeBtn');
+const stopBtn       = document.getElementById('stopBtn');
+const progressWrap  = document.getElementById('progressWrap');
+const progressFill  = document.getElementById('progressFill');
+const progressPct   = document.getElementById('progressPct');
+const progressStatus= document.getElementById('progressStatus');
+const progressLog   = document.getElementById('progressLog');
+const liveCountWrap = document.getElementById('liveCountWrap');
+const liveNumber    = document.getElementById('liveNumber');
+const crowdBadge    = document.getElementById('crowdBadge');
+const originalVideo = document.getElementById('originalVideo');
+const liveCanvas    = document.getElementById('liveCanvas');
+const phOriginal    = document.getElementById('phOriginal');
+const phHeat        = document.getElementById('phHeat');
+const downloadBtn   = document.getElementById('downloadBtn');
+const statAvg       = document.getElementById('statAvg');
+const statMax       = document.getElementById('statMax');
+const statMin       = document.getElementById('statMin');
+const statFrames    = document.getElementById('statFrames');
+
+let selectedFile     = null;
+let allCounts        = [];
+let eventSource      = null;
+let analysisRunning  = false;
+
+// ── Upload ──────────────────────────────────────────────
+uploadZone.addEventListener('click', () => fileInput.click());
+uploadZone.addEventListener('dragover', e => { e.preventDefault(); uploadZone.classList.add('drag-over'); });
+uploadZone.addEventListener('dragleave', () => uploadZone.classList.remove('drag-over'));
+uploadZone.addEventListener('drop', e => {
+  e.preventDefault(); uploadZone.classList.remove('drag-over');
+  const f = e.dataTransfer.files[0];
+  if (f && f.type.startsWith('video/')) setFile(f);
+});
+fileInput.addEventListener('change', () => { if (fileInput.files[0]) setFile(fileInput.files[0]); });
+
+function setFile(f) {
+  selectedFile = f;
+  fileName.textContent = f.name;
+  fileSize.textContent = (f.size / 1024 / 1024).toFixed(2) + ' MB';
+  filePreview.classList.add('show');
+  analyzeBtn.disabled = false;
+
+  // Orijinal videoyu hemen oynat
+  originalVideo.src = URL.createObjectURL(f);
+  originalVideo.style.display = 'block';
+  phOriginal.style.display    = 'none';
+}
+
+// ── Durdur ──────────────────────────────────────────────
+stopBtn.addEventListener('click', async () => {
+  if (!analysisRunning) return;
+  await fetch('/stop', { method: 'POST' });
+  log('⏹ Durdurma isteği gönderildi...');
+});
+
+// ── Analiz ──────────────────────────────────────────────
+analyzeBtn.addEventListener('click', async () => {
+  if (!selectedFile) return;
+
+  analyzeBtn.disabled = true;
+  stopBtn.classList.add('show');
+  analysisRunning = true;
+
+  progressWrap.classList.add('show');
+  progressFill.style.width    = '0%';
+  progressPct.textContent     = '0%';
+  progressStatus.textContent  = 'HAZIR';
+  progressLog.innerHTML       = '';
+  allCounts = [];
+
+  liveCountWrap.classList.add('show');
+  liveNumber.textContent = '0';
+  crowdBadge.className   = 'crowd-badge';
+
+  // Isı haritası placeholder'ı göster
+  liveCanvas.style.display = 'none';
+  phHeat.style.display     = 'flex';
+
+  downloadBtn.classList.remove('show');
+  statAvg.textContent = statMax.textContent = statMin.textContent = statFrames.textContent = '—';
+
+  if (eventSource) { eventSource.close(); eventSource = null; }
+
+  log('Video yükleniyor...');
+
+  const formData = new FormData();
+  formData.append('video', selectedFile);
+
+  try {
+    const res  = await fetch('/upload', { method:'POST', body:formData });
+    const data = await res.json();
+    if (!data.success) { log('HATA: ' + data.error); resetButtons(); return; }
+    log('Model çalışıyor...');
+    startStream(data.filename);
+  } catch(err) {
+    log('HATA: ' + err.message);
+    resetButtons();
+  }
+});
+
+// ── SSE ─────────────────────────────────────────────────
+function startStream(filename) {
+  eventSource = new EventSource('/stream/' + encodeURIComponent(filename));
+
+  eventSource.onmessage = (e) => {
+    const data = JSON.parse(e.data);
+
+    if (data.type === 'frame') {
+      // Isı haritasını güncelle
+      liveCanvas.src = 'data:image/jpeg;base64,' + data.frame;
+      liveCanvas.style.display = 'block';
+      phHeat.style.display     = 'none';
+
+      // Sayaç
+      liveNumber.textContent = data.count;
+      allCounts.push(data.count);
+      updateCrowdBadge(data.count);
+
+      // Progress
+      progressFill.style.width = data.progress + '%';
+      progressPct.textContent  = data.progress + '%';
+
+      log('Kare ' + data.frame_idx + '/' + data.total + ' — Kişi: ' + data.count);
+
+      if (allCounts.length % 10 === 0) drawChart(allCounts);
+    }
+
+    if (data.type === 'stopped') {
+      eventSource.close(); eventSource = null;
+      drawChart(allCounts);
+      progressStatus.textContent = 'DURDURULDU';
+      log('⏹ Analiz durduruldu.');
+      resetButtons();
+    }
+
+    if (data.type === 'done') {
+      eventSource.close(); eventSource = null;
+
+      statAvg.textContent    = data.avg_count;
+      statMax.textContent    = data.max_count;
+      statMin.textContent    = data.min_count;
+      statFrames.textContent = data.total_frames;
+
+      drawChart(data.counts);
+      updateCrowdBadge(data.avg_count);
+
+      downloadBtn.href = data.output_video;
+      downloadBtn.classList.add('show');
+
+      progressFill.style.width   = '100%';
+      progressPct.textContent    = '100%';
+      progressStatus.textContent = 'TAMAMLANDI';
+      liveNumber.textContent     = data.avg_count;
+      log('✓ Analiz tamamlandı!');
+
+      resetButtons();
+    }
+  };
+
+  eventSource.onerror = () => {
+    if (eventSource) { eventSource.close(); eventSource = null; }
+    resetButtons();
+  };
+}
+
+function resetButtons() {
+  analysisRunning     = false;
+  analyzeBtn.disabled = false;
+  stopBtn.classList.remove('show');
+}
+
+// ── Kalabalık Seviyesi ───────────────────────────────────
+function updateCrowdBadge(count) {
+  crowdBadge.className = 'crowd-badge show';
+  if (count < 50) {
+    crowdBadge.classList.add('level-0');
+    crowdBadge.textContent = '🟢 Kalabalık Değil';
+  } else if (count < 250) {
+    crowdBadge.classList.add('level-1');
+    crowdBadge.textContent = '🟡 Orta Seviye Kalabalık';
+  } else if (count < 1000) {
+    crowdBadge.classList.add('level-2');
+    crowdBadge.textContent = '🟠 Kalabalık';
+  } else {
+    crowdBadge.classList.add('level-3');
+    crowdBadge.textContent = '🔴 Aşırı Kalabalık';
+  }
+}
+
+// ── Log ─────────────────────────────────────────────────
+function log(msg) {
+  const s = document.createElement('span');
+  s.textContent = '> ' + msg;
+  progressLog.appendChild(s);
+  while (progressLog.children.length > 4) progressLog.removeChild(progressLog.firstChild);
+  progressLog.scrollTop = progressLog.scrollHeight;
+}
+
+// ── Grafik ──────────────────────────────────────────────
+function drawChart(counts) {
+  const canvas = document.getElementById('countChart');
+  const ctx    = canvas.getContext('2d');
+  const W      = canvas.offsetWidth;
+  const H      = canvas.offsetHeight;
+  canvas.width  = W;
+  canvas.height = H;
+  if (counts.length < 2) return;
+
+  const max  = Math.max(...counts) || 1;
+  const step = W / (counts.length - 1);
+  const pad  = 12;
+
+  ctx.clearRect(0, 0, W, H);
+
+  const grad = ctx.createLinearGradient(0, 0, 0, H);
+  grad.addColorStop(0, 'rgba(0,212,255,0.35)');
+  grad.addColorStop(1, 'rgba(0,212,255,0.0)');
+
+  ctx.beginPath();
+  counts.forEach((c, i) => {
+    const x = i * step;
+    const y = H - pad - ((c / max) * (H - pad * 2));
+    i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+  });
+  ctx.lineTo((counts.length - 1) * step, H);
+  ctx.lineTo(0, H);
+  ctx.closePath();
+  ctx.fillStyle = grad;
+  ctx.fill();
+
+  ctx.beginPath();
+  counts.forEach((c, i) => {
+    const x = i * step;
+    const y = H - pad - ((c / max) * (H - pad * 2));
+    i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+  });
+  ctx.strokeStyle = '#00d4ff';
+  ctx.lineWidth   = 2;
+  ctx.shadowColor = '#00d4ff';
+  ctx.shadowBlur  = 8;
+  ctx.stroke();
+
+  const lx = (counts.length - 1) * step;
+  const ly = H - pad - ((counts[counts.length - 1] / max) * (H - pad * 2));
+  ctx.beginPath();
+  ctx.arc(lx, ly, 4, 0, Math.PI * 2);
+  ctx.fillStyle   = '#00ff88';
+  ctx.shadowColor = '#00ff88';
+  ctx.shadowBlur  = 12;
+  ctx.fill();
+}
+</script>
+</body>
+</html>
